@@ -11,13 +11,13 @@ exports.handler = async function (event, context) {
     return { statusCode: 200, headers, body: "" };
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: "ANTHROPIC_API_KEY not set in Netlify environment variables." }),
+      body: JSON.stringify({ error: "GROQ_API_KEY not set in Netlify environment variables." }),
     };
   }
 
@@ -34,18 +34,17 @@ exports.handler = async function (event, context) {
   }
 
   const requestBody = {
-    model: "claude-haiku-4-5",
+    model: "llama-3.3-70b-versatile",
     max_tokens: 1024,
     messages: messages,
   };
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify(requestBody),
     });
@@ -53,7 +52,7 @@ exports.handler = async function (event, context) {
     const responseText = await response.text();
 
     if (!response.ok) {
-      console.error("Anthropic error:", response.status, responseText);
+      console.error("Groq error:", response.status, responseText);
       return {
         statusCode: response.status,
         headers,
@@ -61,10 +60,22 @@ exports.handler = async function (event, context) {
       };
     }
 
+    // Groq returns OpenAI format — convert to Anthropic format
+    // so the frontend code works without any changes
+    const groqData = JSON.parse(responseText);
+    const converted = {
+      content: [
+        {
+          type: "text",
+          text: groqData.choices[0].message.content,
+        },
+      ],
+    };
+
     return {
       statusCode: 200,
       headers,
-      body: responseText,
+      body: JSON.stringify(converted),
     };
 
   } catch (err) {
